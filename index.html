@@ -2,20 +2,32 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Ibis Dash" />
+<meta name="theme-color" content="#51247A" />
 <title>Ibis Food Court Dash</title>
 <style>
+  :root { --app-height: 100vh; }
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   html, body {
-    width: 100%; height: 100%; overflow: hidden;
+    width: 100%;
+    height: var(--app-height);
+    overflow: hidden;
     background: #51247A;
     font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     color: #fff;
     touch-action: none;
+    overscroll-behavior: none;
+    position: fixed;
+    inset: 0;
   }
   #stage {
     position: relative;
-    width: 100vw; height: 100vh;
+    width: 100vw;
+    height: var(--app-height);
     background: linear-gradient(180deg, #fff6e3 0%, #ffe9c2 55%, #f5d291 100%);
     overflow: hidden;
   }
@@ -155,8 +167,9 @@
   /* ----- Player touch zones ----- */
   #zones {
     position: absolute;
-    left: 0; right: 0; bottom: 0;
-    height: 140px;
+    left: 0; right: 0;
+    bottom: env(safe-area-inset-bottom, 0px);
+    height: clamp(96px, 13vh, 140px);
     display: flex;
     z-index: 4;
     pointer-events: none;
@@ -388,17 +401,38 @@ const state = {
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 function resize() {
+  // Fix iOS Safari 100vh issue: set CSS var to real visible viewport
+  const vh = window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', vh + 'px');
+
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   state.width = window.innerWidth;
-  state.height = window.innerHeight;
+  state.height = vh;
   canvas.width = state.width * dpr;
   canvas.height = state.height * dpr;
   canvas.style.width = state.width + 'px';
   canvas.style.height = state.height + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  state.playFieldBottom = state.height - 140; // above touch zones
+
+  // Measure actual zone height (now responsive via clamp) so the play field
+  // ends exactly where the touch zones begin.
+  const zonesEl = document.getElementById('zones');
+  const zoneH = zonesEl && zonesEl.offsetHeight ? zonesEl.offsetHeight
+              : Math.max(96, Math.min(140, vh * 0.13));
+  state.playFieldBottom = state.height - zoneH;
+
+  // Re-anchor player ibises to the new floor level
+  if (state.players && state.players.length) {
+    const zoneW = state.width / state.players.length;
+    state.players.forEach((pl, i) => {
+      pl.ibis.y = state.playFieldBottom - 30;
+      pl.ibis.zoneLeft = zoneW * i;
+      pl.ibis.zoneRight = zoneW * (i + 1);
+    });
+  }
 }
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 100));
 resize();
 
 /* ---------- Start screen cards ---------- */
