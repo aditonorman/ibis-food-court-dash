@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Ibis Food Court Dash</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #51247A;
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: #fff;
+    touch-action: none;
+  }
+  #stage {
+    position: relative;
+    width: 100vw; height: 100vh;
+    background: linear-gradient(180deg, #fff6e3 0%, #ffe9c2 55%, #f5d291 100%);
+    overflow: hidden;
+  }
+  canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* ----- Overlay screens ----- */
+  .screen {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    text-align: center;
+    z-index: 10;
+  }
+  .screen.active { display: flex; }
+
+  /* ----- Start screen ----- */
+  #startScreen { background: linear-gradient(160deg, #51247A 0%, #6b2faa 50%, #8e44d9 100%); }
+  #startScreen h1 {
+    font-size: clamp(36px, 6vw, 72px);
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-shadow: 0 4px 0 #2e1349, 0 8px 24px rgba(0,0,0,0.3);
+    margin-bottom: 8px;
+  }
+  #startScreen .tagline {
+    font-size: clamp(18px, 2.4vw, 28px);
+    opacity: 0.95;
+    margin-bottom: 30px;
+    font-weight: 600;
+  }
+  #startScreen .sub {
+    font-size: clamp(14px, 1.6vw, 20px);
+    opacity: 0.8;
+    margin-bottom: 24px;
+  }
+  .ibis-row {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 28px;
+  }
+  .ibis-card {
+    width: clamp(140px, 17vw, 200px);
+    height: clamp(180px, 22vw, 250px);
+    background: rgba(255,255,255,0.12);
+    border: 4px dashed rgba(255,255,255,0.4);
+    border-radius: 22px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s, border-color 0.15s;
+  }
+  .ibis-card:active { transform: scale(0.96); }
+  .ibis-card.joined {
+    background: rgba(255,255,255,0.95);
+    color: #51247A;
+    border: 4px solid #fff;
+    border-style: solid;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  .ibis-card canvas {
+    position: static;
+    width: 110px; height: 110px;
+    background: transparent;
+  }
+  .ibis-card .name { font-weight: 800; font-size: clamp(15px, 1.5vw, 20px); }
+  .ibis-card .status { font-size: 13px; opacity: 0.7; }
+  .ibis-card.joined .status { color: #51247A; font-weight: 700; opacity: 1; }
+  #startBtn {
+    background: #ffd54a;
+    color: #51247A;
+    font-size: clamp(20px, 2.4vw, 30px);
+    font-weight: 900;
+    padding: 18px 46px;
+    border: none;
+    border-radius: 999px;
+    box-shadow: 0 8px 0 #c79c1e, 0 14px 30px rgba(0,0,0,0.3);
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  #startBtn:active { transform: translateY(4px); box-shadow: 0 4px 0 #c79c1e, 0 8px 16px rgba(0,0,0,0.3); }
+  #startBtn:disabled { opacity: 0.4; cursor: default; box-shadow: 0 8px 0 #888; }
+
+  /* ----- Game HUD ----- */
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .hud-pill {
+    background: rgba(81, 36, 122, 0.92);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: clamp(14px, 1.6vw, 20px);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  }
+  #timer { min-width: 90px; text-align: center; }
+  #communityBar {
+    flex: 1;
+    max-width: 520px;
+    height: 28px;
+    background: rgba(255,255,255,0.7);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    border: 3px solid #51247A;
+  }
+  #communityFill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ffd54a 0%, #ff8a3d 60%, #ff4d8a 100%);
+    transition: width 0.25s;
+  }
+  #communityLabel {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 14px; color: #51247A;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.7);
+  }
+
+  /* ----- Player touch zones ----- */
+  #zones {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 140px;
+    display: flex;
+    z-index: 4;
+    pointer-events: none;
+  }
+  .zone {
+    flex: 1;
+    border-top: 4px solid rgba(81,36,122,0.4);
+    border-right: 2px dashed rgba(81,36,122,0.25);
+    background: rgba(255,255,255,0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    pointer-events: auto;
+    position: relative;
+  }
+  .zone:last-child { border-right: none; }
+  .zone.hidden { display: none; }
+  .zone .ztitle {
+    font-weight: 800;
+    color: #51247A;
+    font-size: clamp(13px, 1.4vw, 18px);
+    margin-bottom: 4px;
+  }
+  .zone .zscore {
+    font-weight: 900;
+    color: #51247A;
+    font-size: clamp(20px, 2.4vw, 30px);
+  }
+  .zone .zhint {
+    font-size: 11px;
+    color: #51247A;
+    opacity: 0.7;
+    margin-top: 4px;
+  }
+  .zone.active { background: rgba(255,213,74,0.4); }
+  .pass-btn {
+    position: absolute;
+    top: -22px;
+    right: 8px;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    background: #ff4d8a;
+    color: #fff;
+    font-weight: 900;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+    display: none;
+  }
+  .zone.has-item .pass-btn { display: block; }
+  .pass-btn:active { transform: scale(0.92); }
+
+  /* ----- End screen ----- */
+  #endScreen { background: linear-gradient(160deg, #51247A 0%, #ff4d8a 100%); }
+  #endScreen h2 {
+    font-size: clamp(32px, 5vw, 60px);
+    font-weight: 900;
+    margin-bottom: 14px;
+    text-shadow: 0 4px 0 #2e1349;
+  }
+  #endScreen .totals {
+    background: rgba(255,255,255,0.95);
+    color: #51247A;
+    padding: 22px 30px;
+    border-radius: 22px;
+    margin: 16px 0 24px;
+    font-size: clamp(18px, 2vw, 26px);
+    font-weight: 800;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  #endScreen .totals .big {
+    font-size: clamp(48px, 7vw, 84px);
+    color: #ff4d8a;
+    display: block;
+    line-height: 1;
+  }
+  #endScreen .msg {
+    font-size: clamp(20px, 2.6vw, 32px);
+    font-weight: 800;
+    margin-bottom: 26px;
+    max-width: 800px;
+  }
+  #playAgainBtn {
+    background: #ffd54a;
+    color: #51247A;
+    font-size: clamp(18px, 2vw, 26px);
+    font-weight: 900;
+    padding: 16px 40px;
+    border: none;
+    border-radius: 999px;
+    box-shadow: 0 8px 0 #c79c1e;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  #playAgainBtn:active { transform: translateY(4px); box-shadow: 0 4px 0 #c79c1e; }
+
+  /* ----- Floating toast / countdown ----- */
+  #countdown {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    background: rgba(81,36,122,0.4);
+    pointer-events: none;
+  }
+  #countdown.active { display: flex; }
+  #countdown span {
+    font-size: clamp(120px, 22vw, 280px);
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 8px 0 #2e1349, 0 12px 40px rgba(0,0,0,0.4);
+    animation: pop 1s ease-out;
+  }
+  @keyframes pop {
+    0% { transform: scale(0.3); opacity: 0; }
+    30% { transform: scale(1.2); opacity: 1; }
+    80% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+
+  .footer-credit {
+    position: absolute;
+    bottom: 8px; left: 0; right: 0;
+    text-align: center;
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    z-index: 1;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" style="display:none;">
+    <div class="hud-pill" id="timer">⏱ 90</div>
+    <div id="communityBar">
+      <div id="communityFill"></div>
+      <div id="communityLabel">Community Spirit</div>
+    </div>
+    <div class="hud-pill" id="totalScore">🍱 0</div>
+  </div>
+
+  <!-- Player zones (touch controls) -->
+  <div id="zones" style="display:none;"></div>
+
+  <!-- Start screen -->
+  <div id="startScreen" class="screen active">
+    <h1>🐦 Ibis Food Court Dash</h1>
+    <div class="tagline">Join the Food Court Dash!</div>
+    <div class="sub">Tap your ibis to play — 2 to 4 players</div>
+    <div class="ibis-row" id="ibisRow"></div>
+    <button id="startBtn" disabled>Waiting for players…</button>
+    <div class="sub" style="margin-top:24px;">Cooperate · Share food · Fill the Community Meter together</div>
+  </div>
+
+  <!-- End screen -->
+  <div id="endScreen" class="screen">
+    <h2 id="endTitle">🎉 Great teamwork!</h2>
+    <div class="totals">
+      <span class="big" id="finalScore">0</span>
+      Community Points Together
+    </div>
+    <div class="msg" id="endMsg">You made the waiting zone more fun.</div>
+    <button id="playAgainBtn">Play Again</button>
+  </div>
+
+  <!-- Countdown -->
+  <div id="countdown"><span id="countdownNum">3</span></div>
+
+  <div class="footer-credit">UQ Union Food Court · Kiosk Prototype</div>
+</div>
+
+<script>
+/* =========================================================
+   Ibis Food Court Dash
+   2–4 player cooperative kiosk game
+   ========================================================= */
+
+const PERSONALITIES = [
+  { id: 0, name: 'Study Ibis',  emoji: '📚', color: '#51247A', accent: '#c9a8ee' },
+  { id: 1, name: 'Hungry Ibis', emoji: '🍔', color: '#ff6b35', accent: '#ffd0bf' },
+  { id: 2, name: 'Social Ibis', emoji: '💜', color: '#ff4d8a', accent: '#ffc2d6' },
+  { id: 3, name: 'Sleepy Ibis', emoji: '😴', color: '#3da4d6', accent: '#bfe4f4' },
+];
+
+const FOOD_TYPES = [
+  { id: 'bubble', label: 'Bubble Tea', color: '#d9a4e0', points: 10, emoji: '🧋' },
+  { id: 'sushi',  label: 'Sushi',      color: '#ff9aa2', points: 15, emoji: '🍣' },
+  { id: 'burger', label: 'Burger',     color: '#c98a3a', points: 12, emoji: '🍔' },
+  { id: 'chips',  label: 'Chips',      color: '#ffd766', points: 8,  emoji: '🍟' },
+  { id: 'coffee', label: 'Coffee',     color: '#7a4a2a', points: 10, emoji: '☕' },
+  { id: 'team',   label: 'Team Feast', color: '#ffd54a', points: 40, emoji: '🎁', team: true },
+];
+
+const OBSTACLE_TYPES = [
+  { id: 'tray',  emoji: '🍽',  color: '#bbb' },
+  { id: 'flychip', emoji: '🥔', color: '#caa15f' },
+  { id: 'spill', emoji: '💦', color: '#7ec0ee' },
+];
+
+const GAME_DURATION = 90; // seconds
+const COMMUNITY_TARGET = 600;
+
+/* ---------- State ---------- */
+const state = {
+  scene: 'start',         // 'start' | 'playing' | 'end'
+  players: [],            // joined player objects
+  items: [],              // active falling foods
+  obstacles: [],
+  particles: [],
+  timeLeft: GAME_DURATION,
+  community: 0,
+  totalScore: 0,
+  spawnTimer: 0,
+  obstacleTimer: 0,
+  lastTs: 0,
+  width: 0, height: 0,
+  playFieldBottom: 0,
+};
+
+/* ---------- Canvas setup ---------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  state.width = window.innerWidth;
+  state.height = window.innerHeight;
+  canvas.width = state.width * dpr;
+  canvas.height = state.height * dpr;
+  canvas.style.width = state.width + 'px';
+  canvas.style.height = state.height + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  state.playFieldBottom = state.height - 140; // above touch zones
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- Start screen cards ---------- */
+const ibisRow = document.getElementById('ibisRow');
+const startBtn = document.getElementById('startBtn');
+PERSONALITIES.forEach((p) => {
+  const card = document.createElement('div');
+  card.className = 'ibis-card';
+  card.dataset.id = p.id;
+  const c = document.createElement('canvas');
+  c.width = 220; c.height = 220;
+  drawIbis(c.getContext('2d'), 110, 130, 1.4, p, true);
+  card.appendChild(c);
+  const name = document.createElement('div');
+  name.className = 'name';
+  name.textContent = p.emoji + ' ' + p.name;
+  card.appendChild(name);
+  const status = document.createElement('div');
+  status.className = 'status';
+  status.textContent = 'Tap to join';
+  card.appendChild(status);
+  card.addEventListener('click', () => toggleJoin(p.id, card, status));
+  ibisRow.appendChild(card);
+});
+
+function toggleJoin(id, card, statusEl) {
+  const existing = state.players.find(pl => pl.id === id);
+  if (existing) {
+    state.players = state.players.filter(pl => pl.id !== id);
+    card.classList.remove('joined');
+    statusEl.textContent = 'Tap to join';
+  } else {
+    if (state.players.length >= 4) return;
+    state.players.push(makePlayer(PERSONALITIES[id]));
+    card.classList.add('joined');
+    statusEl.textContent = 'READY!';
+  }
+  updateStartBtn();
+}
+
+function updateStartBtn() {
+  const n = state.players.length;
+  if (n < 2) {
+    startBtn.disabled = true;
+    startBtn.textContent = n === 0 ? 'Waiting for players…' : 'Need 1 more ibis…';
+  } else {
+    startBtn.disabled = false;
+    startBtn.textContent = `Start! (${n} ibises)`;
+  }
+}
+
+function makePlayer(personality) {
+  return {
+    id: personality.id,
+    personality,
+    score: 0,
+    holding: null,         // {food} or null
+    ibis: { x: 0, y: 0, targetX: 0, vy: 0, bob: 0, facing: 1, squish: 1 },
+    zoneIndex: -1,
+    activeTouch: null,
+  };
+}
+
+/* ---------- Start game ---------- */
+startBtn.addEventListener('click', () => {
+  // assign zone indices left→right
+  state.players.forEach((pl, i) => pl.zoneIndex = i);
+  document.getElementById('startScreen').classList.remove('active');
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('zones').style.display = 'flex';
+  buildZones();
+  positionPlayers();
+  state.scene = 'countdown';
+  runCountdown(() => {
+    state.scene = 'playing';
+    state.lastTs = performance.now();
+    state.timeLeft = GAME_DURATION;
+    state.community = 0;
+    state.totalScore = 0;
+    state.items = [];
+    state.obstacles = [];
+    state.particles = [];
+  });
+});
+
+function runCountdown(done) {
+  const cd = document.getElementById('countdown');
+  const num = document.getElementById('countdownNum');
+  let n = 3;
+  cd.classList.add('active');
+  num.textContent = n;
+  const tick = () => {
+    n--;
+    if (n <= 0) {
+      num.textContent = 'GO!';
+      setTimeout(() => { cd.classList.remove('active'); done(); }, 700);
+    } else {
+      num.textContent = n;
+      // restart animation
+      num.style.animation = 'none'; void num.offsetWidth; num.style.animation = '';
+      setTimeout(tick, 900);
+    }
+  };
+  setTimeout(tick, 900);
+}
+
+/* ---------- Build touch zones at bottom ---------- */
+const zonesEl = document.getElementById('zones');
+function buildZones() {
+  zonesEl.innerHTML = '';
+  state.players.forEach((pl, i) => {
+    const z = document.createElement('div');
+    z.className = 'zone';
+    z.style.background = hexToRgba(pl.personality.accent, 0.55);
+    z.dataset.idx = i;
+
+    const title = document.createElement('div');
+    title.className = 'ztitle';
+    title.textContent = pl.personality.emoji + ' ' + pl.personality.name;
+    z.appendChild(title);
+
+    const score = document.createElement('div');
+    score.className = 'zscore';
+    score.textContent = '0';
+    z.appendChild(score);
+
+    const hint = document.createElement('div');
+    hint.className = 'zhint';
+    hint.textContent = 'Drag to move · Tap food to grab';
+    z.appendChild(hint);
+
+    const passBtn = document.createElement('button');
+    passBtn.className = 'pass-btn';
+    passBtn.textContent = '↪';
+    passBtn.title = 'Pass food';
+    passBtn.addEventListener('click', (e) => { e.stopPropagation(); passFood(i); });
+    z.appendChild(passBtn);
+
+    z.addEventListener('pointerdown', (e) => onZonePointer(e, i, 'down'));
+    z.addEventListener('pointermove', (e) => onZonePointer(e, i, 'move'));
+    z.addEventListener('pointerup',   (e) => onZonePointer(e, i, 'up'));
+    z.addEventListener('pointercancel', (e) => onZonePointer(e, i, 'up'));
+
+    pl.zoneEl = z;
+    pl.scoreEl = score;
+    pl.passBtnEl = passBtn;
+    zonesEl.appendChild(z);
+  });
+  // For unused slots — hide nothing; only show joined players' zones
+}
+
+function hexToRgba(hex, a) {
+  const v = hex.replace('#','');
+  const r = parseInt(v.substring(0,2),16);
+  const g = parseInt(v.substring(2,4),16);
+  const b = parseInt(v.substring(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function positionPlayers() {
+  const n = state.players.length;
+  const zoneW = state.width / n;
+  state.players.forEach((pl, i) => {
+    const cx = zoneW * (i + 0.5);
+    pl.ibis.x = cx;
+    pl.ibis.targetX = cx;
+    pl.ibis.y = state.playFieldBottom - 30;
+    pl.ibis.zoneLeft = zoneW * i;
+    pl.ibis.zoneRight = zoneW * (i + 1);
+  });
+}
+
+/* ---------- Touch handling per zone ---------- */
+function onZonePointer(e, zoneIdx, kind) {
+  e.preventDefault();
+  const pl = state.players[zoneIdx];
+  if (!pl) return;
+  const rect = pl.zoneEl.getBoundingClientRect();
+  // Map x within the zone to the ibis position in same zone (full width of zone)
+  const localX = e.clientX - rect.left;
+  const ratio = Math.max(0, Math.min(1, localX / rect.width));
+  const targetX = pl.ibis.zoneLeft + ratio * (pl.ibis.zoneRight - pl.ibis.zoneLeft);
+  if (kind === 'down') {
+    pl.activeTouch = e.pointerId;
+    pl.ibis.targetX = targetX;
+    pl.zoneEl.classList.add('active');
+  } else if (kind === 'move' && pl.activeTouch === e.pointerId) {
+    pl.ibis.targetX = targetX;
+  } else if (kind === 'up') {
+    if (pl.activeTouch === e.pointerId) pl.activeTouch = null;
+    pl.zoneEl.classList.remove('active');
+  }
+}
+
+/* ---------- Pass food ---------- */
+function passFood(zoneIdx) {
+  const pl = state.players[zoneIdx];
+  if (!pl || !pl.holding) return;
+  // pass to next player (wrap)
+  const next = state.players[(zoneIdx + 1) % state.players.length];
+  // animate item moving across
+  const item = {
+    type: pl.holding.type,
+    x: pl.ibis.x,
+    y: pl.ibis.y - 40,
+    vx: (next.ibis.x - pl.ibis.x) / 30,
+    vy: -3,
+    rot: 0, vr: 0.15,
+    flying: true,
+    targetPlayer: next,
+    life: 30,
+  };
+  state.items.push(item);
+  pl.holding = null;
+  refreshZoneUI(pl);
+  bumpCommunity(15);
+  popText(pl.ibis.x, pl.ibis.y - 60, '+ pass!', '#51247A');
+}
+
+function refreshZoneUI(pl) {
+  pl.zoneEl.classList.toggle('has-item', !!pl.holding);
+  pl.scoreEl.textContent = pl.score;
+}
+
+/* ---------- Spawning ---------- */
+function spawnFood() {
+  // 12% chance of team food once community is past 30%
+  const canTeam = state.community / COMMUNITY_TARGET > 0.3 && state.players.length >= 2;
+  const teamRoll = canTeam && Math.random() < 0.12;
+  let type;
+  if (teamRoll) {
+    type = FOOD_TYPES[5];
+  } else {
+    type = FOOD_TYPES[Math.floor(Math.random() * 5)];
+  }
+  const x = 40 + Math.random() * (state.width - 80);
+  state.items.push({
+    type, x, y: -40,
+    vx: (Math.random() - 0.5) * 0.4,
+    vy: 1.4 + Math.random() * 1.4,
+    rot: 0, vr: (Math.random() - 0.5) * 0.06,
+    flying: false,
+    life: 9999,
+    catchers: type.team ? new Set() : null,
+  });
+}
+
+function spawnObstacle() {
+  const t = OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)];
+  const x = 60 + Math.random() * (state.width - 120);
+  state.obstacles.push({
+    type: t, x, y: -40,
+    vx: (Math.random() - 0.5) * 0.6,
+    vy: 2 + Math.random() * 1.5,
+    rot: 0, vr: (Math.random() - 0.5) * 0.1,
+    life: 9999,
+  });
+}
+
+/* ---------- Game loop ---------- */
+function loop(ts) {
+  const dt = Math.min(40, ts - state.lastTs);
+  state.lastTs = ts;
+  if (state.scene === 'playing') update(dt / 16.67);
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame((ts) => { state.lastTs = ts; loop(ts); });
+
+function update(dt) {
+  // Timer
+  state.timeLeft -= dt / 60;
+  if (state.timeLeft <= 0) {
+    state.timeLeft = 0;
+    endGame();
+    return;
+  }
+  document.getElementById('timer').textContent = '⏱ ' + Math.ceil(state.timeLeft);
+
+  // Spawn foods (rate scales mildly with players)
+  state.spawnTimer -= dt;
+  if (state.spawnTimer <= 0) {
+    spawnFood();
+    state.spawnTimer = 45 - state.players.length * 3 + Math.random() * 25;
+  }
+  // Spawn obstacles
+  state.obstacleTimer -= dt;
+  if (state.obstacleTimer <= 0) {
+    spawnObstacle();
+    state.obstacleTimer = 110 + Math.random() * 60;
+  }
+
+  // Move players (ease toward targetX)
+  state.players.forEach(pl => {
+    const ib = pl.ibis;
+    const diff = ib.targetX - ib.x;
+    ib.facing = diff < -0.3 ? -1 : diff > 0.3 ? 1 : ib.facing;
+    ib.x += diff * 0.22 * dt;
+    ib.bob += 0.18 * dt;
+    ib.squish += (1 - ib.squish) * 0.2;
+  });
+
+  // Update items
+  for (let i = state.items.length - 1; i >= 0; i--) {
+    const it = state.items[i];
+    it.x += it.vx * dt;
+    it.y += it.vy * dt;
+    it.rot += it.vr * dt;
+    if (it.flying) {
+      it.vy += 0.3 * dt;
+      it.life -= dt;
+      // catch by target
+      if (it.targetPlayer) {
+        const dx = it.targetPlayer.ibis.x - it.x;
+        const dy = (it.targetPlayer.ibis.y - 30) - it.y;
+        if (dx*dx + dy*dy < 1600) {
+          if (!it.targetPlayer.holding) {
+            it.targetPlayer.holding = { type: it.type };
+            refreshZoneUI(it.targetPlayer);
+            popText(it.targetPlayer.ibis.x, it.targetPlayer.ibis.y - 60, 'Caught!', '#51247A');
+          } else {
+            // already holding — auto-collect
+            collectFood(it.targetPlayer, it.type);
+          }
+          state.items.splice(i, 1);
+          continue;
+        }
+      }
+      if (it.life <= 0) { state.items.splice(i, 1); continue; }
+    } else {
+      // check collision with players' ibis catch zone
+      for (const pl of state.players) {
+        const dx = pl.ibis.x - it.x;
+        const dy = (pl.ibis.y - 30) - it.y;
+        const r2 = dx*dx + dy*dy;
+        if (r2 < 1800) {
+          if (it.type.team) {
+            it.catchers.add(pl.id);
+            // bounce up briefly
+            it.vy = Math.max(it.vy - 1.2, -2);
+            if (it.catchers.size >= 2) {
+              // Team caught!
+              const bonus = it.type.points * it.catchers.size;
+              state.totalScore += bonus;
+              bumpCommunity(80);
+              state.players.forEach(p => {
+                if (it.catchers.has(p.id)) {
+                  p.score += Math.floor(it.type.points * 0.8);
+                  refreshZoneUI(p);
+                  popText(p.ibis.x, p.ibis.y - 70, '+TEAM!', '#ff4d8a');
+                }
+              });
+              spawnConfetti(it.x, it.y, 30);
+              state.items.splice(i, 1);
+              break;
+            }
+          } else {
+            // Pick up: if not holding, hold; if holding, auto-collect
+            if (!pl.holding) {
+              pl.holding = { type: it.type };
+              refreshZoneUI(pl);
+              popText(pl.ibis.x, pl.ibis.y - 60, 'Grabbed!', '#51247A');
+            } else {
+              collectFood(pl, it.type);
+            }
+            pl.ibis.squish = 1.25;
+            spawnConfetti(it.x, it.y, 8, it.type.color);
+            state.items.splice(i, 1);
+            break;
+          }
+        }
+      }
+      if (it.y > state.playFieldBottom + 30) {
+        state.items.splice(i, 1);
+      }
+    }
+  }
+
+  // Update obstacles
+  for (let i = state.obstacles.length - 1; i >= 0; i--) {
+    const ob = state.obstacles[i];
+    ob.x += ob.vx * dt;
+    ob.y += ob.vy * dt;
+    ob.rot += ob.vr * dt;
+    // collision: drops held food
+    for (const pl of state.players) {
+      const dx = pl.ibis.x - ob.x;
+      const dy = (pl.ibis.y - 30) - ob.y;
+      if (dx*dx + dy*dy < 2000) {
+        if (pl.holding) {
+          popText(pl.ibis.x, pl.ibis.y - 60, 'Oops!', '#ff4d8a');
+          pl.holding = null;
+          refreshZoneUI(pl);
+        } else {
+          popText(pl.ibis.x, pl.ibis.y - 60, '!', '#ff4d8a');
+        }
+        pl.ibis.squish = 0.7;
+        state.obstacles.splice(i, 1);
+        break;
+      }
+    }
+    if (ob.y > state.playFieldBottom + 30) state.obstacles.splice(i, 1);
+  }
+
+  // Auto-collect held items every 4 seconds? No — let players pass or just stockpile.
+  // Auto-deposit holding when player reaches edge of zone? Instead: pressing "pass" sends.
+  // Auto-collect held food slowly into score so the holding slot isn't permanent stockpile
+  state.players.forEach(pl => {
+    if (pl.holding) {
+      pl.holding.timer = (pl.holding.timer || 0) + dt;
+      if (pl.holding.timer > 240) { // ~4 seconds at 60fps
+        collectFood(pl, pl.holding.type);
+        pl.holding = null;
+        refreshZoneUI(pl);
+      }
+    }
+  });
+
+  // Particles
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy += 0.18 * dt;
+    p.life -= dt;
+    if (p.life <= 0) state.particles.splice(i, 1);
+  }
+
+  // HUD updates
+  document.getElementById('totalScore').textContent = '🍱 ' + state.totalScore;
+  const pct = Math.min(100, (state.community / COMMUNITY_TARGET) * 100);
+  document.getElementById('communityFill').style.width = pct + '%';
+  document.getElementById('communityLabel').textContent =
+    pct >= 100 ? '🎉 COMMUNITY MAXED!' : `Community Spirit ${Math.floor(pct)}%`;
+}
+
+function collectFood(pl, type) {
+  pl.score += type.points;
+  state.totalScore += type.points;
+  bumpCommunity(type.points * 1.2);
+  refreshZoneUI(pl);
+  popText(pl.ibis.x, pl.ibis.y - 60, '+' + type.points, '#51247A');
+}
+
+function bumpCommunity(amt) {
+  state.community = Math.min(COMMUNITY_TARGET * 1.5, state.community + amt);
+}
+
+/* ---------- Particles ---------- */
+function spawnConfetti(x, y, n, color) {
+  for (let i = 0; i < n; i++) {
+    state.particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: -Math.random() * 5 - 1,
+      life: 50 + Math.random() * 30,
+      color: color || ['#ffd54a','#ff4d8a','#51247A','#3da4d6'][Math.floor(Math.random()*4)],
+      size: 3 + Math.random() * 4,
+    });
+  }
+}
+const floatTexts = [];
+function popText(x, y, text, color) {
+  floatTexts.push({ x, y, text, color, life: 60 });
+}
+
+/* =========================================================
+   Rendering
+   ========================================================= */
+function render() {
+  ctx.clearRect(0, 0, state.width, state.height);
+  drawBackground();
+  if (state.scene === 'playing' || state.scene === 'countdown') {
+    drawObstacles();
+    drawFoods();
+    drawPlayers();
+    drawParticles();
+    drawFloatTexts();
+  }
+}
+
+function drawBackground() {
+  const w = state.width, h = state.height;
+
+  // Sky/ceiling
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.45);
+  skyGrad.addColorStop(0, '#fff6e3');
+  skyGrad.addColorStop(1, '#ffe9c2');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, w, h * 0.45);
+
+  // Floor (food court tiles)
+  ctx.fillStyle = '#f5d291';
+  ctx.fillRect(0, h * 0.45, w, h * 0.55);
+
+  // Floor tile pattern
+  ctx.strokeStyle = 'rgba(139, 92, 51, 0.18)';
+  ctx.lineWidth = 1.5;
+  const tileSize = 60;
+  for (let x = -tileSize; x < w + tileSize; x += tileSize) {
+    for (let y = h*0.45; y < h; y += tileSize/2) {
+      const offset = ((y - h*0.45) / (tileSize/2)) % 2 === 0 ? 0 : tileSize/2;
+      ctx.beginPath();
+      ctx.rect(x + offset, y, tileSize, tileSize/2);
+      ctx.stroke();
+    }
+  }
+
+  // Food stalls along back wall
+  const stalls = [
+    { name: 'BUBBLE', color: '#d9a4e0', icon: '🧋' },
+    { name: 'SUSHI',  color: '#ff9aa2', icon: '🍣' },
+    { name: 'BURGER', color: '#c98a3a', icon: '🍔' },
+    { name: 'CHIPS',  color: '#ffd766', icon: '🍟' },
+    { name: 'COFFEE', color: '#7a4a2a', icon: '☕' },
+  ];
+  const stallW = w / stalls.length;
+  stalls.forEach((s, i) => {
+    const sx = i * stallW;
+    const sy = h * 0.08;
+    const sh = h * 0.32;
+    // awning
+    ctx.fillStyle = s.color;
+    ctx.fillRect(sx + 8, sy, stallW - 16, 26);
+    // alternating stripes
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    for (let k = 0; k < stallW / 24; k++) {
+      if (k % 2 === 0) ctx.fillRect(sx + 8 + k * 24, sy, 12, 26);
+    }
+    // stall body
+    ctx.fillStyle = '#fff8ee';
+    ctx.fillRect(sx + 14, sy + 26, stallW - 28, sh - 26);
+    ctx.strokeStyle = '#51247A';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(sx + 14, sy + 26, stallW - 28, sh - 26);
+    // counter (purple UQ accent)
+    ctx.fillStyle = '#51247A';
+    ctx.fillRect(sx + 14, sy + sh - 18, stallW - 28, 14);
+    // stall name
+    ctx.fillStyle = '#51247A';
+    ctx.font = `900 ${Math.min(20, stallW*0.13)}px -apple-system, Segoe UI, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(s.name, sx + stallW/2, sy + 50);
+    // icon
+    ctx.font = `${Math.min(40, stallW*0.22)}px sans-serif`;
+    ctx.fillText(s.icon, sx + stallW/2, sy + sh*0.55);
+  });
+
+  // Tables (round) in the foreground/midground
+  drawTable(w * 0.18, h * 0.55, 50);
+  drawTable(w * 0.45, h * 0.6, 56);
+  drawTable(w * 0.78, h * 0.56, 50);
+
+  // Queue line markers
+  ctx.fillStyle = 'rgba(81,36,122,0.15)';
+  for (let i = 0; i < 6; i++) {
+    ctx.fillRect(40 + i * 80, h * 0.42, 8, 8);
+  }
+
+  // UQ banner
+  ctx.fillStyle = '#51247A';
+  ctx.fillRect(0, 0, w, 28);
+  ctx.fillStyle = '#ffd54a';
+  ctx.font = '800 16px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('★  UQ UNION FOOD COURT  ★', w / 2, 14);
+}
+
+function drawTable(cx, cy, r) {
+  // chair shadows
+  ctx.fillStyle = 'rgba(81,36,122,0.5)';
+  ctx.beginPath(); ctx.ellipse(cx - r - 6, cy + 4, 14, 6, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx + r + 6, cy + 4, 14, 6, 0, 0, Math.PI*2); ctx.fill();
+  // chairs
+  ctx.fillStyle = '#51247A';
+  ctx.beginPath(); ctx.arc(cx - r - 6, cy, 12, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + r + 6, cy, 12, 0, Math.PI*2); ctx.fill();
+  // table shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.45 + 4, r * 1.05, r * 0.35, 0, 0, Math.PI*2); ctx.fill();
+  // table top
+  const grad = ctx.createRadialGradient(cx - r*0.3, cy - r*0.3, r*0.1, cx, cy, r*1.1);
+  grad.addColorStop(0, '#ffeec2');
+  grad.addColorStop(1, '#c98a3a');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.5, 0, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#51247A';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+/* ---------- Ibis ---------- */
+function drawIbis(c, x, y, scale, personality, isCard) {
+  const s = scale;
+  c.save();
+  c.translate(x, y);
+
+  // shadow
+  c.fillStyle = 'rgba(0,0,0,0.18)';
+  c.beginPath(); c.ellipse(0, 30*s, 24*s, 6*s, 0, 0, Math.PI*2); c.fill();
+
+  // legs
+  c.strokeStyle = '#222';
+  c.lineWidth = 2.5*s;
+  c.beginPath(); c.moveTo(-7*s, 22*s); c.lineTo(-7*s, 34*s); c.stroke();
+  c.beginPath(); c.moveTo(7*s, 22*s); c.lineTo(7*s, 34*s); c.stroke();
+  // feet
+  c.beginPath(); c.moveTo(-12*s, 34*s); c.lineTo(-2*s, 34*s); c.stroke();
+  c.beginPath(); c.moveTo(2*s, 34*s); c.lineTo(12*s, 34*s); c.stroke();
+
+  // body (white)
+  c.fillStyle = '#fafafa';
+  c.beginPath(); c.ellipse(0, 8*s, 22*s, 20*s, 0, 0, Math.PI*2); c.fill();
+  c.strokeStyle = '#bbb';
+  c.lineWidth = 1.5*s;
+  c.stroke();
+
+  // UQ purple shirt
+  c.fillStyle = '#51247A';
+  c.beginPath();
+  c.moveTo(-19*s, 10*s);
+  c.quadraticCurveTo(-20*s, 24*s, -10*s, 26*s);
+  c.lineTo(10*s, 26*s);
+  c.quadraticCurveTo(20*s, 24*s, 19*s, 10*s);
+  c.quadraticCurveTo(0, 20*s, -19*s, 10*s);
+  c.closePath();
+  c.fill();
+  // UQ logo on shirt
+  c.fillStyle = '#ffd54a';
+  c.font = `900 ${8*s}px sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText('UQ', 0, 17*s);
+
+  // head
+  c.fillStyle = '#fafafa';
+  c.beginPath(); c.arc(0, -10*s, 13*s, 0, Math.PI*2); c.fill();
+  c.strokeStyle = '#bbb';
+  c.stroke();
+
+  // beak (long curved black)
+  c.fillStyle = '#1a1a1a';
+  c.beginPath();
+  c.moveTo(8*s, -10*s);
+  c.quadraticCurveTo(28*s, -6*s, 32*s, 4*s);
+  c.quadraticCurveTo(20*s, -2*s, 8*s, -6*s);
+  c.closePath();
+  c.fill();
+
+  // eye
+  c.fillStyle = '#fff';
+  c.beginPath(); c.arc(2*s, -12*s, 3.5*s, 0, Math.PI*2); c.fill();
+  c.fillStyle = '#000';
+  if (personality.id === 3) {
+    // sleepy: closed eye
+    c.strokeStyle = '#000'; c.lineWidth = 1.5*s;
+    c.beginPath(); c.arc(2*s, -12*s, 3.5*s, Math.PI*0.1, Math.PI*0.9); c.stroke();
+  } else {
+    c.beginPath(); c.arc(2.5*s, -11.5*s, 1.8*s, 0, Math.PI*2); c.fill();
+  }
+
+  // Personality props
+  if (personality.id === 0) {
+    // study glasses
+    c.strokeStyle = '#1a1a1a'; c.lineWidth = 1.5*s;
+    c.beginPath(); c.arc(2*s, -12*s, 5*s, 0, Math.PI*2); c.stroke();
+    c.beginPath(); c.arc(-8*s, -12*s, 4*s, 0, Math.PI*2); c.stroke();
+    c.beginPath(); c.moveTo(-3*s, -12*s); c.lineTo(-3*s, -12*s); c.stroke();
+  }
+  if (personality.id === 1) {
+    // hungry: tongue
+    c.fillStyle = '#ff6b85';
+    c.beginPath(); c.ellipse(14*s, 2*s, 3*s, 2*s, 0, 0, Math.PI*2); c.fill();
+  }
+  if (personality.id === 2) {
+    // social: heart
+    drawHeart(c, -16*s, -16*s, 4*s, '#ff4d8a');
+    drawHeart(c, 16*s, -18*s, 3*s, '#ff4d8a');
+  }
+  if (personality.id === 3) {
+    // sleepy: Z's
+    c.fillStyle = '#3da4d6';
+    c.font = `900 ${10*s}px sans-serif`;
+    c.fillText('z', -14*s, -22*s);
+    c.fillText('Z', -8*s, -28*s);
+  }
+
+  // tail
+  c.fillStyle = '#fafafa';
+  c.beginPath();
+  c.moveTo(-18*s, 5*s);
+  c.lineTo(-28*s, 2*s);
+  c.lineTo(-22*s, 12*s);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = '#bbb';
+  c.stroke();
+
+  c.restore();
+}
+
+function drawHeart(c, x, y, r, color) {
+  c.fillStyle = color;
+  c.beginPath();
+  c.moveTo(x, y + r);
+  c.bezierCurveTo(x - r*1.5, y - r*0.5, x - r*0.5, y - r*1.5, x, y - r*0.3);
+  c.bezierCurveTo(x + r*0.5, y - r*1.5, x + r*1.5, y - r*0.5, x, y + r);
+  c.fill();
+}
+
+function drawPlayers() {
+  state.players.forEach(pl => {
+    const ib = pl.ibis;
+    const bob = Math.sin(ib.bob) * 3;
+    ctx.save();
+    ctx.translate(ib.x, ib.y + bob);
+    ctx.scale(ib.facing, 1);
+    ctx.scale(1, ib.squish);
+    drawIbis(ctx, 0, 0, 1.6, pl.personality, false);
+    ctx.restore();
+
+    // Hold indicator
+    if (pl.holding) {
+      ctx.save();
+      ctx.translate(ib.x, ib.y - 50 + bob);
+      drawFoodIcon(ctx, 0, 0, 1.0, pl.holding.type);
+      // timer ring
+      const t = (pl.holding.timer || 0) / 240;
+      ctx.strokeStyle = '#51247A';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 20, -Math.PI/2, -Math.PI/2 + Math.PI*2*Math.min(1, t));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Name label
+    ctx.fillStyle = 'rgba(81,36,122,0.85)';
+    ctx.font = '700 12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(pl.personality.name, ib.x, ib.y + 50);
+  });
+}
+
+/* ---------- Foods ---------- */
+function drawFoodIcon(c, x, y, scale, type) {
+  c.save();
+  c.translate(x, y);
+  c.scale(scale, scale);
+  // background bubble
+  c.fillStyle = type.team ? 'rgba(255,213,74,0.95)' : 'rgba(255,255,255,0.9)';
+  c.beginPath(); c.arc(0, 0, 18, 0, Math.PI*2); c.fill();
+  c.strokeStyle = type.team ? '#ff4d8a' : '#51247A';
+  c.lineWidth = type.team ? 3 : 2;
+  c.stroke();
+  // emoji
+  c.font = '22px sans-serif';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(type.emoji, 0, 1);
+  if (type.team) {
+    // sparkles
+    c.fillStyle = '#fff';
+    for (let i = 0; i < 4; i++) {
+      const a = (Date.now() / 200 + i * Math.PI/2) % (Math.PI*2);
+      c.beginPath(); c.arc(Math.cos(a)*22, Math.sin(a)*22, 2, 0, Math.PI*2); c.fill();
+    }
+  }
+  c.restore();
+}
+
+function drawFoods() {
+  state.items.forEach(it => {
+    ctx.save();
+    ctx.translate(it.x, it.y);
+    ctx.rotate(it.rot);
+    drawFoodIcon(ctx, 0, 0, 1.0, it.type);
+    ctx.restore();
+    // catchers preview for team food
+    if (it.type.team && it.catchers && it.catchers.size > 0) {
+      ctx.fillStyle = '#ff4d8a';
+      ctx.font = '700 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${it.catchers.size}/2 — need a friend!`, it.x, it.y - 26);
+    }
+  });
+}
+
+/* ---------- Obstacles ---------- */
+function drawObstacles() {
+  state.obstacles.forEach(ob => {
+    ctx.save();
+    ctx.translate(ob.x, ob.y);
+    ctx.rotate(ob.rot);
+    // angry red bubble
+    ctx.fillStyle = 'rgba(255, 77, 77, 0.25)';
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ob.type.emoji, 0, 1);
+    ctx.restore();
+  });
+}
+
+function drawParticles() {
+  state.particles.forEach(p => {
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+  });
+}
+
+function drawFloatTexts() {
+  for (let i = floatTexts.length - 1; i >= 0; i--) {
+    const f = floatTexts[i];
+    f.y -= 0.8;
+    f.life -= 1;
+    ctx.fillStyle = f.color;
+    ctx.font = '800 18px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = Math.max(0, f.life / 60);
+    ctx.fillText(f.text, f.x, f.y);
+    ctx.globalAlpha = 1;
+    if (f.life <= 0) floatTexts.splice(i, 1);
+  }
+}
+
+/* =========================================================
+   End game
+   ========================================================= */
+function endGame() {
+  state.scene = 'end';
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('zones').style.display = 'none';
+
+  // Compute message based on community spirit & contribution balance
+  const pct = state.community / COMMUNITY_TARGET;
+  const scores = state.players.map(p => p.score);
+  const minS = Math.min(...scores), maxS = Math.max(...scores);
+  const balanced = maxS === 0 ? true : (minS / Math.max(1, maxS)) > 0.5;
+
+  let title = '🎉 Great teamwork!';
+  let msg = 'You made the waiting zone more fun.';
+  if (pct >= 1) {
+    title = '✨ Community Maxed! ✨';
+    msg = 'You filled the food court with good vibes — a perfect team!';
+    spawnConfetti(state.width/2, state.height/2, 200);
+  } else if (pct >= 0.7 && balanced) {
+    title = '💜 Beautifully Balanced!';
+    msg = 'Every ibis chipped in. That\'s what the food court is all about.';
+  } else if (pct >= 0.5) {
+    title = '🍱 Nice Work, Team!';
+    msg = 'You made the wait fly by. Come back next time for a higher score!';
+  } else {
+    title = '🐦 Good Try!';
+    msg = 'Waiting was a little more fun together. Tap Play Again to beat your score!';
+  }
+
+  document.getElementById('endTitle').textContent = title;
+  document.getElementById('endMsg').textContent = msg;
+  document.getElementById('finalScore').textContent = state.totalScore;
+  document.getElementById('endScreen').classList.add('active');
+
+  // Continue celebration animation in background
+  state.scene = 'celebrate';
+  startCelebrationLoop();
+}
+
+function startCelebrationLoop() {
+  let last = performance.now();
+  function tick(ts) {
+    const dt = Math.min(40, ts - last); last = ts;
+    // Make players bounce
+    state.players.forEach((pl, i) => {
+      pl.ibis.bob += 0.3 * (dt/16.67);
+      pl.ibis.y = state.playFieldBottom - 30 + Math.sin(pl.ibis.bob + i)*8;
+      pl.ibis.squish = 1 + Math.sin(pl.ibis.bob*2 + i) * 0.1;
+    });
+    // sprinkle confetti occasionally
+    if (Math.random() < 0.18) {
+      spawnConfetti(Math.random()*state.width, -10, 6);
+      state.particles.forEach(p => { p.vy = Math.max(p.vy, -1); });
+    }
+    // update particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.x += p.vx * (dt/16.67); p.y += p.vy * (dt/16.67);
+      p.vy += 0.12;
+      p.life -= dt/16.67;
+      if (p.life <= 0 || p.y > state.height + 20) state.particles.splice(i, 1);
+    }
+    // render bg + players + particles
+    ctx.clearRect(0,0,state.width,state.height);
+    drawBackground();
+    drawPlayers();
+    drawParticles();
+    if (state.scene === 'celebrate') requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+document.getElementById('playAgainBtn').addEventListener('click', () => {
+  // Reset to start screen
+  state.scene = 'start';
+  state.players = [];
+  state.items = [];
+  state.obstacles = [];
+  state.particles = [];
+  state.community = 0;
+  state.totalScore = 0;
+  state.timeLeft = GAME_DURATION;
+  document.querySelectorAll('.ibis-card').forEach(card => {
+    card.classList.remove('joined');
+    card.querySelector('.status').textContent = 'Tap to join';
+  });
+  updateStartBtn();
+  document.getElementById('endScreen').classList.remove('active');
+  document.getElementById('startScreen').classList.add('active');
+});
+
+// Prevent default touch behaviors
+document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+</script>
+</body>
+</html>
